@@ -3,6 +3,25 @@ import {ApiError} from "../utils/ApiError.js";
 import {User} from "../models/User.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { use } from 'react';
+
+//make a method to generate tokens 
+ const generateAccessRefreshTokens = async(userId) => {
+   try{
+       const user = await User.findById(userId)
+       const accessToken =user.generateAccessToken()
+       const refreshToken = user.generateRefreshToken()
+
+       user.refreshToken = refreshToken
+       await user.save({ validateBeforeSave:false})
+
+       return {accessToken,refreshToken}
+
+
+   } catch(error){
+      throw new ApiError(500,"Something went wrong while generating refresh and access token")
+   }
+ }
 
 const registerUser = asyncHandler(async(req,res)=>{
    //get user details from  frontend
@@ -34,7 +53,7 @@ const registerUser = asyncHandler(async(req,res)=>{
 
 
      //check if user already exist : username ,email
-     const existedUser = User.findOne({
+     const existedUser = await User.findOne({
         $or:[{username},{email}]
      })
      if(existedUser){
@@ -43,7 +62,12 @@ const registerUser = asyncHandler(async(req,res)=>{
 
       //check for cover image, check for avatar
       const avatarLocalPath = req.files?.avatar[0]?.path;
-      const coverImagePath =req.files?.coverImage[0]?.Path;
+    //  const coverImagePath =req.files?.coverImage[0]?.Path;  iis mein check kuch dikat hai
+
+    let coverImagePath ;
+    if(req.files && Array.isArray(req.files.coverImagePath) && req.files.coverImagePath.length>0){
+        coverImagePath = req.files.coverImagePath[0].path
+    }
 
       if(!avatarLocalPath){
         throw new ApiError(400,"avatar file is required")
@@ -85,4 +109,94 @@ const registerUser = asyncHandler(async(req,res)=>{
 
 })
 
-export { registerUser}
+const loginUser= asyncHandler(async(req,res) => {
+   // req body -> data
+   //username or email
+   //find the user
+   //password check
+   //access and refresh token
+   //send cookie
+   //response
+
+   // req body -> data
+   const{email,username,password}=req.body
+    
+   //username or email
+   if(!username || !email){
+      throw new ApiError(400,"username or email is required")
+   }
+
+    //find the user
+   const user = await User.findOne({
+      $or:[{username},{email}]
+    })
+
+    if(!user){
+      throw new ApiError(401,"User does not exist")
+    }
+    //password check
+     const isPasswordValid = await user.isPasswordCorrect(password)
+
+     if(!isPasswordValid){
+      throw new ApiError(401,"Invalid user credential")
+    }
+   
+
+    //access and refresh token
+    const{accessToken , refreshToken}= await generateAccessRefreshTokens(user._id)
+
+    const loggedInUser = await User.findOne(user._id).select("-password -refreshToken")
+    
+     //send cookie
+    const options = {
+      httpOnly: true,
+      secure:true
+   }
+    
+   //response
+   return res
+   .status(200)
+   .cookie("accessToken",accessToken,options)
+   .cookie("refreshToken", refreshToken, options)
+   .json(
+      new ApiResponse(
+         200,
+         {
+            user: loggedInUser,accessToken,refreshToken
+         },
+         "User logged In Successfully"
+      )
+   )
+
+})
+const logoutUser = asyncHandler(async(req,res) =>{
+   //we make middleware for logout purpose name auth.middleware.js
+  await User.findByIdAndUpdate(
+      req.user._id,
+      {
+         $set:{
+            refreshToken: undefined
+         }
+      },
+      {
+         new: true
+      }
+   )
+
+   const options ={
+      httpOnly:true,
+      secure:true
+   }
+
+   return res
+   .status(200)
+   .clearCookie("accessToken",options)
+   .clearCookie("refreshToken",options)
+   .json(new ApiResponse(200,{},"User logged Out"))
+})
+
+export { 
+   registerUser,
+   loginUser,
+   logoutUser
+}
