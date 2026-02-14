@@ -255,11 +255,12 @@ const changeCurrentPassword = asyncHandler(async(req,res) =>{
 
 })
 
-const getCurrentUser = asyncHandler(async(req,res) =>{
-    return res
+const getCurrentUser = asyncHandler(async (req, res) => {
+  return res
     .status(200)
-    .json(200,req.user,"current user fetched successfully")
-})
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+});
+
 
 const updateAccountDetails = asyncHandler(async(req,res) =>{
    const {fullname , email} = req.body
@@ -268,7 +269,7 @@ const updateAccountDetails = asyncHandler(async(req,res) =>{
       throw new ApiError(400,"All field are required")
    }
 
-   const user = User.findByIdAndUpdate(
+   const user = await User.findByIdAndUpdate(
       req.user?._id,
       {
          $set:{
@@ -307,7 +308,7 @@ const updateUserAvatar = asyncHandler(async(req,res) =>{
 
       return res
      .status(200)
-     .json(200,user,"avatar updated successfully")
+      .json(new ApiResponse(200, user, "Avatar updated successfully"));
 
 
 })
@@ -318,7 +319,7 @@ const updateUserCoverImage = asyncHandler(async(req,res) =>{
     if(!coverImageLocalPath){
        throw new ApiError(400,"cover image file is missing")
     }
-     const coverImage = await uploadOnCloudinary(avatarLocalPath)
+     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
      if(!coverImage.url){
        throw new ApiError(400,"Error while uploading on coverImage")
      }
@@ -334,7 +335,7 @@ const updateUserCoverImage = asyncHandler(async(req,res) =>{
 
      return res
      .status(200)
-     .json(200,user,"cover Image updated successfully")
+     .json(new ApiResponse(200, user, "Cover image updated successfully"));
 
 })
 
